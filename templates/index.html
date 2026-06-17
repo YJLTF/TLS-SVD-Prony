@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>风电功率周期分析 - TLS-SVD-Prony算法</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --secondary: #f8f9fa;
+            --accent: #00b8d9;
+            --text: #202124;
+            --text-secondary: #5f6368;
+            --border: #dadce0;
+            --success: #34a853;
+            --warning: #fbbc04;
+            --error: #ea4335;
+            --bg: #ffffff;
+            --card-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px 40px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: var(--card-shadow);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 30px;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: var(--card-shadow);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s ease;
+            background: var(--secondary);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg);
+            box-shadow: 0 0 0 3px rgba(26,115,232,0.1);
+        }
+
+        .range-group {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .range-separator {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .file-upload {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: var(--secondary);
+        }
+
+        .file-upload:hover {
+            border-color: var(--primary);
+            background: rgba(26,115,232,0.05);
+        }
+
+        .file-upload.dragover {
+            border-color: var(--primary);
+            background: rgba(26,115,232,0.1);
+        }
+
+        .file-upload input {
+            display: none;
+        }
+
+        .file-upload-icon {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .file-upload-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .file-upload-hint {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(26,115,232,0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(26,115,232,0.05);
+        }
+
+        .results-panel {
+            display: none;
+        }
+
+        .results-panel.active {
+            display: block;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-card.secondary {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-card.accent {
+            background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        .chart-container {
+            margin-bottom: 24px;
+        }
+
+        .chart-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 12px;
+        }
+
+        .chart-wrapper {
+            background: var(--secondary);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .chart-wrapper img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .components-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .components-table th {
+            background: var(--secondary);
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text);
+            border-bottom: 2px solid var(--border);
+        }
+
+        .components-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .components-table tr:hover {
+            background: rgba(26,115,232,0.03);
+        }
+
+        .components-table .period-highlight {
+            background: rgba(26,115,232,0.1);
+            font-weight: 600;
+        }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        .error-message {
+            display: none;
+            background: rgba(234,67,53,0.1);
+            border: 1px solid var(--error);
+            border-radius: 10px;
+            padding: 16px;
+            margin-top: 16px;
+            color: var(--error);
+            font-size: 14px;
+        }
+
+        .error-message.active {
+            display: block;
+        }
+
+        .download-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>风电功率7-15天周期分量分析</h1>
+            <p class="subtitle">基于改进TLS-SVD-Prony算法 | 支持数据上传、参数调整与可视化分析</p>
+        </header>
+
+        <div class="main-content">
+            <aside class="sidebar">
+                <div class="panel">
+                    <h2 class="panel-title">参数设置</h2>
+
+                    <div class="form-group">
+                        <label>数据文件上传</label>
+                        <div class="file-upload" id="fileUpload">
+                            <input type="file" id="dataFile" accept=".csv,.txt,.dat">
+                            <div class="file-upload-icon">📁</div>
+                            <div class="file-upload-text">点击或拖拽上传数据文件</div>
+                            <div class="file-upload-hint">支持 CSV、TXT、DAT 格式（每行一个数值）</div>
+                        </div>
+                        <div id="fileName" style="margin-top:10px;font-size:13px;color:var(--text-secondary);"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>小波基类型</label>
+                        <select id="wavelet">
+                            <option value="coif5" selected>Coiflet 5 (coif5)</option>
+                            <option value="db10">Daubechies 10 (db10)</option>
+                            <option value="sym8">Symlet 8 (sym8)</option>
+                            <option value="bior4.4">Biorthogonal 4.4</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>小波分解层数</label>
+                        <input type="number" id="level" value="4" min="1" max="10">
+                    </div>
+
+                    <div class="form-group">
+                        <label>目标周期范围（天）</label>
+                        <div class="range-group">
+                            <input type="number" id="targetPeriodMin" value="7" min="1" max="30">
+                            <span class="range-separator">至</span>
+                            <input type="number" id="targetPeriodMax" value="15" min="1" max="30">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>采样间隔（小时）</label>
+                        <input type="number" id="samplingInterval" value="1" min="0.5" max="24" step="0.5">
+                    </div>
+
+                    <div class="form-group">
+                        <label>数据天数（仅示例数据）</label>
+                        <input type="number" id="nDays" value="30" min="7" max="365">
+                    </div>
+
+                    <button class="btn btn-primary" id="analyzeBtn">
+                        <span>🚀</span> 开始分析
+                    </button>
+
+                    <div class="download-section">
+                        <button class="btn btn-secondary" id="downloadSampleBtn" style="width:100%;">
+                            📥 下载示例数据
+                        </button>
+                    </div>
+
+                    <div class="error-message" id="errorMessage"></div>
+                </div>
+            </aside>
+
+            <main class="results-panel" id="resultsPanel">
+                <div class="panel">
+                    <h2 class="panel-title">分析结果</h2>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="totalComponents">0</div>
+                            <div class="stat-label">检测到的总分量数</div>
+                        </div>
+                        <div class="stat-card secondary">
+                            <div class="stat-value" id="targetComponentsCount">0</div>
+                            <div class="stat-label">7-15天周期分量</div>
+                        </div>
+                        <div class="stat-card accent">
+                            <div class="stat-value" id="dominantPeriod">-</div>
+                            <div class="stat-label">主导周期（天）</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📊 时域信号对比</div>
+                        <div class="chart-wrapper">
+                            <img id="timeDomainChart" src="" alt="时域波形对比">
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📊 周期分量分布</div>
+                        <div class="chart-wrapper">
+                            <img id="periodComponentsChart" src="" alt="周期分量分布">
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📊 功率谱密度</div>
+                        <div class="chart-wrapper">
+                            <img id="powerSpectrumChart" src="" alt="功率谱密度">
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📊 信号重构对比</div>
+                        <div class="chart-wrapper">
+                            <img id="reconstructionChart" src="" alt="信号重构对比">
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">📋 检测到的周期分量详情</div>
+                        <div style="overflow-x:auto;">
+                            <table class="components-table">
+                                <thead>
+                                    <tr>
+                                        <th>序号</th>
+                                        <th>周期（天）</th>
+                                        <th>频率（1/天）</th>
+                                        <th>幅值</th>
+                                        <th>阻尼比</th>
+                                        <th>相位（弧度）</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="componentsTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">正在分析数据，请稍候...</div>
+    </div>
+
+    <script>
+        const fileUpload = document.getElementById('fileUpload');
+        const dataFile = document.getElementById('dataFile');
+        const fileName = document.getElementById('fileName');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const downloadSampleBtn = document.getElementById('downloadSampleBtn');
+        const resultsPanel = document.getElementById('resultsPanel');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // 文件上传处理
+        fileUpload.addEventListener('click', () => dataFile.click());
+
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                dataFile.files = e.dataTransfer.files;
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        dataFile.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            fileName.textContent = `已选择: ${file.name}`;
+        }
+
+        // 下载示例数据
+        downloadSampleBtn.addEventListener('click', () => {
+            window.location.href = '/api/download_sample';
+        });
+
+        // 分析按钮
+        analyzeBtn.addEventListener('click', async () => {
+            errorMessage.classList.remove('active');
+            resultsPanel.classList.remove('active');
+            loadingOverlay.classList.add('active');
+
+            const formData = new FormData();
+            formData.append('wavelet', document.getElementById('wavelet').value);
+            formData.append('level', document.getElementById('level').value);
+            formData.append('targetPeriodMin', document.getElementById('targetPeriodMin').value);
+            formData.append('targetPeriodMax', document.getElementById('targetPeriodMax').value);
+            formData.append('samplingInterval', document.getElementById('samplingInterval').value);
+            formData.append('nDays', document.getElementById('nDays').value);
+
+            if (dataFile.files.length) {
+                formData.append('datafile', dataFile.files[0]);
+            }
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayResults(result);
+                } else {
+                    showError(result.error || '分析过程中发生错误');
+                }
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+            } finally {
+                loadingOverlay.classList.remove('active');
+            }
+        });
+
+        function displayResults(result) {
+            resultsPanel.classList.add('active');
+
+            // 更新统计卡片
+            document.getElementById('totalComponents').textContent = result.all_components_count;
+            document.getElementById('targetComponentsCount').textContent = result.target_count;
+
+            if (result.target_components.length > 0) {
+                const dominantPeriod = result.target_components[0].period_days.toFixed(1);
+                document.getElementById('dominantPeriod').textContent = dominantPeriod;
+            }
+
+            // 更新图表
+            document.getElementById('timeDomainChart').src = 'data:image/png;base64,' + result.plots.time_domain;
+            document.getElementById('periodComponentsChart').src = 'data:image/png;base64,' + result.plots.period_components;
+            document.getElementById('powerSpectrumChart').src = 'data:image/png;base64,' + result.plots.power_spectrum;
+            document.getElementById('reconstructionChart').src = 'data:image/png;base64,' + result.plots.reconstruction;
+
+            // 更新表格
+            const tbody = document.getElementById('componentsTableBody');
+            tbody.innerHTML = '';
+
+            result.target_components.forEach((comp, index) => {
+                const row = document.createElement('tr');
+                if (comp.period_days >= 7 && comp.period_days <= 15) {
+                    row.classList.add('period-highlight');
+                }
+
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${comp.period_days.toFixed(2)}</td>
+                    <td>${(comp.frequency || 0).toFixed(6)}</td>
+                    <td>${(comp.amplitude || 0).toFixed(4)}</td>
+                    <td>${(comp.damping_ratio || 0).toFixed(6)}</td>
+                    <td>${(comp.phase || 0).toFixed(4)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // 滚动到结果区域
+            resultsPanel.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+    </script>
+</body>
+</html>
